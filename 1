@@ -1,0 +1,79 @@
+1. updatePreview()の場所
+428行目のupdatePreview();の直後（}catch(e){の直前）に追加
+STEP2（/api/predict_llm_structured）の結果処理後
+runPredict関数内、document.getElementById('rmeta').innerHTML=metaParts.join('');の直後のupdatePreview();の後に追加。
+前後の文脈
+    document.getElementById('rmeta').innerHTML=metaParts.join('');
+    updatePreview();   // ← この直後
+  }catch(e){
+
+    updatePreview();
+    // ↓ここに追加
+    const llmTokens=new Set();
+    llmList.forEach(mask=>mask.forEach(c=>llmTokens.add(c.token)));
+    if(llmTokens.size>0){
+      fetchWordTranslations([...llmTokens],lang).then(transMap=>{
+        document.querySelectorAll('.ctok[data-token]').forEach(el=>{
+          const trans=transMap[el.dataset.token];
+          const transEl=el.nextElementSibling;
+          if(transEl&&transEl.classList.contains('ctrans')){
+            transEl.textContent=trans?`（${trans}）`:'';
+          }
+        });
+      });
+    }
+    // ↑ここまで
+
+
+
+2. LLM予測 MASK 1が残る問題
+
+修正箇所1: runPredict関数内 STEP2のelse
+runPredict関数内、llmListEl.innerHTML='<div style="color:var(--text3);font-size:12px">（予測なし）</div>';を以下に変更。
+修正前（419〜421行目）
+      } else {
+        llmListEl.innerHTML='<div style="color:var(--text3);font-size:12px">（予測なし）</div>';
+      }
+修正後
+      } else {
+        llmListEl.innerHTML='';
+        document.getElementById('llmCol').style.display='none';
+      }
+
+修正箇所2: renderResults関数内 LLM列の「取得中」表示
+renderResults内（492〜494行目）の修正前
+  } else if(sw.llm) {
+　　// BERT表示直後はまだLLMデータなし → 取得中表示はfreeJpWrapが担当
+    ll.innerHTML='<div style="color:var(--text3);font-size:12px">（取得中）</div>';
+  }
+修正後
+  } else if(sw.llm) {
+    document.getElementById('llmCol').style.display='';  // 念のためリセット
+    ll.innerHTML='<div style="color:var(--text3);font-size:12px">（取得中）</div>';
+  }
+
+
+
+
+
+3. 2行問題・翻訳問題
+doTranslate関数内、let filled=lastOriginalText||lastProcessedText||'';を以下に変更。
+修正前（689行目）
+let filled=lastOriginalText||lastProcessedText||'';
+修正後
+let filled=lastProcessedText||lastOriginalText||'';
+
+
+
+4. applyWordTranslations関数が未使用
+updatePreview関数内 修正前:
+html=html.replace(/[ㄱ-ㅎ]*\[MASK_([A-Z0-9_]+)\]/g,(match,label)=>{
+修正後:
+html=html.replace(/[\u3131-\u314E\u3150-\u318F]*\[MASK_([A-Z0-9_]+)\]/g,(match,label)=>{
+
+
+5. updatePreview内の字母正規表現が狭い（[ㄱ-ㅎ]）
+doTranslate関数内 修正前:
+filled=filled.replace(/[ㄱ-ㅎ]*\[MASK_([A-Z0-9_]+)\]/g,(match,label)=>{
+修正後:
+filled=filled.replace(/[\u3131-\u314E\u3150-\u318F]*\[MASK_([A-Z0-9_]+)\]/g,(match,label)=>{
