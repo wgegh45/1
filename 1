@@ -77,3 +77,72 @@ doTranslate関数内 修正前:
 filled=filled.replace(/[ㄱ-ㅎ]*\[MASK_([A-Z0-9_]+)\]/g,(match,label)=>{
 修正後:
 filled=filled.replace(/[\u3131-\u314E\u3150-\u318F]*\[MASK_([A-Z0-9_]+)\]/g,(match,label)=>{
+
+
+
+6. renderResultsのLLM列がrenderResults呼び出し時点では常に空
+修正前（renderResults内LLM列、492〜495行目）:
+  } else if(sw.llm) {
+    // BERT表示直後はまだLLMデータなし → 取得中表示はfreeJpWrapが担当
+    ll.innerHTML='<div style="color:var(--text3);font-size:12px">（取得中）</div>';
+  }
+修正後:
+  } else if(sw.llm) {
+    document.getElementById('llmCol').style.display='';
+    ll.innerHTML='<div style="color:var(--text3);font-size:12px">（取得中）</div>';
+  }
+
+
+
+7. STEP2でllm_customを受け取っていない
+runPredict関数内 STEP2、修正前（409〜411行目）:
+    const strData=await strResp.json();
+    const llmList=strData.llm||[];
+    lastData={...lastData, llm:llmList, llm_used_ref:strData.llm_used_ref||false};
+修正後:
+    const strData=await strResp.json();
+    const llmList=strData.llm||[];
+    const llmCustom=strData.llm_custom||{};
+    lastData={...lastData, llm:llmList, llm_custom_llm:llmCustom, llm_used_ref:strData.llm_used_ref||false};
+
+updatePreview();の直前に以下を追加
+    document.getElementById('rmeta').innerHTML=metaParts.join('');
+    updatePreview();
+修正後:  
+    document.getElementById('rmeta').innerHTML=metaParts.join('');
+
+    // カスタムMASKのLLM候補を2列グリッドで追加
+    const {jamo_map:jm={}, ref_counts:rc={}}=lastData;
+    document.getElementById('customWrap').innerHTML='';
+    for(const label of Object.keys(llmCustom)){
+      const bertList=lastData.bert_custom?.[label]||[];
+      const maskList=llmCustom[label]||[];
+      if(bertList.length===0&&maskList.length===0) continue;
+      const sec=document.createElement('div');
+      sec.className='cust-sec';
+      sec.innerHTML=`<div class="cust-lbl">[MASK_${label}]</div>`;
+      const grid=document.createElement('div');
+      grid.className='cols';
+      const makeCol=(items,type)=>{
+        const col=document.createElement('div');
+        const hdr=document.createElement('div');
+        hdr.className=`col-hdr ${type}`;
+        hdr.textContent=type==='bert'?'BERT予測':'LLM予測';
+        const box=document.createElement('div');
+        box.style.cssText='display:flex;flex-direction:column;gap:3px';
+        items.forEach((cands,mi)=>box.appendChild(makeMaskSec(cands,mi,'cust:'+label,jm,rc)));
+        col.appendChild(hdr);
+        col.appendChild(box);
+        return col;
+      };
+      grid.appendChild(makeCol(bertList,'bert'));
+      grid.appendChild(makeCol(maskList,'llm'));
+      sec.appendChild(grid);
+      document.getElementById('customWrap').appendChild(sec);
+    }
+
+    updatePreview();
+
+
+
+
